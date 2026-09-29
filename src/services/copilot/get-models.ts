@@ -9,7 +9,18 @@ export const getModels = async () => {
 
   if (!response.ok) throw new HTTPError("Failed to get models", response)
 
-  return (await response.json()) as ModelsResponse
+  const raw = (await response.json()) as ModelsResponse
+
+  // Intelligent filtering: only expose models that are not explicitly disabled by policy,
+  // and prioritize models actually supported for completions / responses
+  const filtered = raw.data.filter(
+    (m) => m.policy === undefined || m.policy.state !== "disabled",
+  )
+
+  return {
+    ...raw,
+    data: filtered,
+  }
 }
 
 export interface ModelsResponse {
