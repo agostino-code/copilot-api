@@ -11,10 +11,31 @@ export const getModels = async () => {
 
   const raw = (await response.json()) as ModelsResponse
 
-  // Intelligent filtering: only expose models that are not explicitly disabled by policy,
-  // and prioritize models actually supported for completions / responses
+  // Strict filter: only models verified and genuinely accepted by Copilot completions
+  const verifiedChatModels = new Set([
+    "gpt-4o",
+    "gpt-4o-mini",
+    "gpt-4.1",
+    "gpt-3.5-turbo",
+    "gpt-4o-2024-11-20",
+    "gpt-4o-2024-08-06",
+    "gpt-4o-2024-05-13",
+    "gpt-4o-mini-2024-07-18",
+    "gpt-4.1-2025-04-14",
+    "gpt-4-o-preview",
+    "gpt-3.5-turbo-0613",
+    "copilot-search-a",
+    "copilot-search-b",
+    "copilot-search-c",
+    "exec-agent-a",
+    "exec-agent-b",
+    "exec-agent-c",
+  ])
+
   const filtered = raw.data.filter(
-    (m) => m.policy === undefined || m.policy.state !== "disabled",
+    (m) =>
+      (m.policy === undefined || m.policy.state !== "disabled") &&
+      (verifiedChatModels.has(m.id) || m.capabilities.type === "embeddings"),
   )
 
   return {

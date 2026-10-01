@@ -5,47 +5,12 @@ import { copilotHeaders, copilotBaseUrl } from "~/lib/api-config"
 import { HTTPError } from "~/lib/error"
 import { state } from "~/lib/state"
 
-// Canonical models supported directly on Copilot chat completions
-const SUPPORTED_DIRECT_CHAT_MODELS = new Set([
-  "gpt-4o",
-  "gpt-4o-mini",
-  "gpt-4.1",
-  "gpt-3.5-turbo",
-  "gpt-4o-2024-11-20",
-  "gpt-4o-2024-08-06",
-  "gpt-4o-2024-05-13",
-  "gpt-4o-mini-2024-07-18",
-  "gpt-4.1-2025-04-14",
-  "gpt-4-0613",
-  "gpt-4-0125-preview",
-  "gpt-4-o-preview",
-  "gpt-3.5-turbo-0613",
-])
-
 export const createChatCompletions = async (
   payload: ChatCompletionsPayload,
 ) => {
   if (!state.copilotToken) throw new Error("Copilot token not found")
 
-  // Transparent model fallback / alias normalization:
-  // If the requested model is not directly supported by the current user policy/endpoint,
-  // map to the best compatible flagship model (e.g. gpt-4o or gpt-4o-mini).
-  let targetModel = payload.model
-  if (!SUPPORTED_DIRECT_CHAT_MODELS.has(targetModel)) {
-    if (targetModel.includes("mini") || targetModel.includes("haiku") || targetModel.includes("flash")) {
-      targetModel = "gpt-4o-mini"
-    } else {
-      targetModel = "gpt-4o"
-    }
-    consola.info(`Mapping requested model "${payload.model}" to supported model "${targetModel}"`)
-  }
-
-  const normalizedPayload: ChatCompletionsPayload = {
-    ...payload,
-    model: targetModel,
-  }
-
-  const enableVision = normalizedPayload.messages.some(
+  const enableVision = payload.messages.some(
     (x) =>
       typeof x.content !== "string"
       && x.content?.some((x) => x.type === "image_url"),
@@ -53,7 +18,7 @@ export const createChatCompletions = async (
 
   // Agent/user check for X-Initiator header
   // Determine if any message is from an agent ("assistant" or "tool")
-  const isAgentCall = normalizedPayload.messages.some((msg) =>
+  const isAgentCall = payload.messages.some((msg) =>
     ["assistant", "tool"].includes(msg.role),
   )
 
@@ -66,7 +31,7 @@ export const createChatCompletions = async (
   const response = await fetch(`${copilotBaseUrl(state)}/chat/completions`, {
     method: "POST",
     headers,
-    body: JSON.stringify(normalizedPayload),
+    body: JSON.stringify(payload),
   })
 
   if (!response.ok) {
@@ -74,16 +39,11 @@ export const createChatCompletions = async (
     throw new HTTPError("Failed to create chat completions", response)
   }
 
-  if (normalizedPayload.stream) {
+  if (payload.stream) {
     return events(response)
   }
 
-  const json = (await response.json()) as ChatCompletionResponse
-  // Preserve the requested model name in the response for client compatibility
-  if (json && json.model) {
-    json.model = payload.model
-  }
-  return json
+  return (await response.json()) as ChatCompletionResponse
 }
 
 // Streaming types
